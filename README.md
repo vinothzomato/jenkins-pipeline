@@ -16,11 +16,10 @@
 def pipeline = new com.zomato.Pipeline()
 
 podTemplate(label: 'jenkins-pipeline', containers: [
-    containerTemplate(name: 'jnlp', image: 'jenkinsci/jnlp-slave:2.62', args: '${computer.jnlpmac} ${computer.name}', workingDir: '/home/jenkins', resourceRequestCpu: '500m', resourceLimitCpu: '500m', resourceRequestMemory: '1024Mi', resourceLimitMemory: '1024Mi'),
-    containerTemplate(name: 'docker', image: 'docker:1.12.6', command: 'cat', ttyEnabled: true),
-    containerTemplate(name: 'maven', image: 'maven:3.5.0-jdk-8', command: 'cat', ttyEnabled: true),
-    containerTemplate(name: 'helm', image: 'lachlanevenson/k8s-helm:v2.6.1', command: 'cat', ttyEnabled: true),
-    containerTemplate(name: 'kubectl', image: 'lachlanevenson/k8s-kubectl:v1.8.3', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'jnlp', image: 'jenkinsci/jnlp-slave:3.29-1-alpine', args: '${computer.jnlpmac} ${computer.name}', workingDir: '/home/jenkins', resourceRequestCpu: '500m', resourceLimitCpu: '500m', resourceRequestMemory: '1024Mi', resourceLimitMemory: '1024Mi'),
+    containerTemplate(name: 'docker', image: 'docker:18.06.0', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'helm', image: 'vinothzomato/k8s-helm:latest', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'kubectl', image: 'vinothzomato/k8s-kubectl:latest', command: 'cat', ttyEnabled: true)
 ],
 volumes:[
     hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
@@ -29,14 +28,13 @@ volumes:[
   node ('jenkins-pipeline') {
 
     def pwd = pwd()
-    def chart_dir = "${pwd}/charts/hellojava"
+    def chart_dir = "${pwd}/charts/yourchart"
     def tags = [env.BUILD_TAG, 'latest']
-    def docker_registry_url = "jcorioland.azurecr.io"
-    def app_hostname = "hellojava.aks.jcorioland.io";
-    def docker_email = "jucoriol@microsoft.com"
-    def docker_repo = "hellojava"
-    def docker_acct = "kubernetes"
-    def jenkins_registry_cred_id = "acr_creds"
+    def docker_registry_url = "registry-intl-vpc.ap-south-1.aliyuncs.com"
+    def app_hostname = "yourhostname";
+    def docker_repo = "repo"
+    def docker_acct = "namespace"
+    def jenkins_registry_cred_id = "registry-intl-vpc.ap-south-1.aliyuncs.com"
 
     // checkout sources
     checkout scm
@@ -44,36 +42,13 @@ volumes:[
     // set additional git envvars for image tagging
     pipeline.gitEnvVars()
 
-    // Execute Maven build and tests
-    stage ('Maven Build & Tests') {
-
-      container ('maven') {
-        sh "mvn install"
-      }
-
-    }
-
     // Test Helm deployment (dry-run)
-    stage ('Helm test deployment') {
+    stage ('Helm lint') {
 
       container('helm') {
 
         // run helm chart linter
         pipeline.helmLint(chart_dir)
-
-        // run dry-run helm chart installation
-        pipeline.helmDeploy(
-          dry_run       : true,
-          name          : "hello-java",
-          namespace     : "hello-java",
-          version_tag   : tags.get(0),
-          chart_dir     : chart_dir,
-          replicas      : 2,
-          cpu           : "10m",
-          memory        : "128Mi",
-          hostname      : app_hostname
-        )
-
       }
     }
 
@@ -85,7 +60,7 @@ volumes:[
 
         // perform docker login
         withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: jenkins_registry_cred_id, usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD']]) {
-          sh "docker login -e ${docker_email} -u ${env.USERNAME} -p ${env.PASSWORD} ${docker_registry_url}"
+          sh "docker login -u ${env.USERNAME} -p ${env.PASSWORD} ${docker_registry_url}"
         }
 
         // build and publish container
