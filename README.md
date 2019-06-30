@@ -43,12 +43,25 @@ volumes:[
     pipeline.gitEnvVars()
 
     // Test Helm deployment (dry-run)
-    stage ('Helm lint') {
+    stage ('Helm test deployment') {
 
       container('helm') {
 
         // run helm chart linter
         pipeline.helmLint(chart_dir)
+      
+        // run dry-run helm chart installation
+        pipeline.helmDeploy(
+            dry_run       : true,
+            name          : "hello-java",
+            namespace     : "hello-java",
+            version_tag   : tags.get(0),
+            chart_dir     : chart_dir,
+            replicas      : 2,
+            cpu           : "10m",
+            memory        : "128Mi",
+            hostname      : app_hostname
+          )
       }
     }
 
